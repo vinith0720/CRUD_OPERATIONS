@@ -1,24 +1,8 @@
-var express = require('express');
+import express from "express";
 var router = express.Router();
 
+import connection from '../module/dbconnection.js';
 
-var db = [
-  {
-      "id": 0,
-      "name": "kumar",
-      "age": 32
-  },
-  {
-      "id": 1,
-      "name": "kumar",
-      "age": 32
-  },
-  {
-      "id": 3,
-      "name": "kumar",
-      "age": 32
-  }
-];
 
 
 /* GET users listing. */
@@ -28,86 +12,105 @@ router.get('/', function(req, res, next) {
 
 
 
-router.get("/get",(req ,res)=> {
-
+router.get("/get", async (req, res) => {
   try {
-    res.status(200).json(db);
-  }catch (err) {
-    res.status(400).send(` Error getting user: ${err.message}`);
-}
-
+    const [rows, fields] = await connection.promise().query("SELECT * FROM USER;");
+    res.status(200).json({ data: rows });
+  } catch (err) {
+    res.status(400).json({ Error: err.message });
+  }
 });
-
-router.get("/get/:id",(req ,res)=> {
-
-  try {
-    const id = parseInt(req.params.id); 
-    console.log(db.length , id);
     
-    (db.length >= id) ? res.json(db[id]) : res.status(400).send("user not found") ;
-} catch (err) {
-    res.status(400).send(` Error getting user: ${err.message}`);
-}
 
+router.get("/get/:id",async (req ,res)=> {
+  try {
+
+    const id = parseInt(req.params.id); 
+    const [existingUser] = await connection.promise().query("SELECT * FROM USER WHERE id = ?", [id]);
+    console.log(existingUser);
+    
+    if (existingUser.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({
+      user : existingUser
+    })
+
+  } catch (error) {
+    res.status(500).json({ message: `Error updating user: ${error.message}` });
+  }
 });
 
 
 router.post("/createuser", (req ,res) => {
   try{
-        const {name , age } = req.body
-        if (!name && !age) {
-          throw new Error("Name and age are required");
+        const {name , age  , role } = req.body
+        if (!name && !age && !role) {
+          throw new Error("Name and age and role are required");
         }
-        const user = { id : db.length , name : name , age : age}
-        db.push(user) 
-        res.status(200).send("user created ..,")
-      }
+        connection.query("INSERT INTO user (name, age, role) VALUES (?, ?, ?)", [name,age,role],
+          (err,result,fields) => {
+            console.log(err,fields,result);
+            
+            if(err) {res.status(400).json({ERROR :err})}
+            res.status(200).json({
+              field : fields,
+              results:result,
+              msg:"user created..,"
+            })
+          });
+        }
   catch(err){
     res.status(400).send(`user not created because ${err.message}`);
   }
 });
 
-router.put("/updateuser/:id", (req, res) => {
+router.put("/updateuser/:id", async (req, res) => {
   try {
-      const { name, age } = req.body;
-      const id = parseInt(req.params.id);
+    const { name, age } = req.body; 
+    const id = parseInt(req.params.id); 
 
-      const userIndex = db.findIndex(user => user.id === id);
-      if (userIndex === -1) {
-          return res.status(404).json({ message: "User not found" });
-      }
-      db[userIndex] = { ...db[userIndex], name, age };
+    const [existingUser] = await connection.promise().query("SELECT * FROM USER WHERE id = ?", [id]);
+    console.log(existingUser.users);
+    
+    if (existingUser.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
+    const [result] = await connection.promise().query("UPDATE USER SET name = ?, age = ? WHERE id = ?", [name, age, id]);
+
+    if (result.affectedRows > 0) {
       res.status(200).json({
-          message: "User updated successfully",
-          user: db[userIndex]
+        message: "User updated successfully",
+        updatedUser: { id, name, age },
       });
-
+    } else {
+      res.status(400).json({ message: "Failed to update user" });
+    }
   } catch (error) {
-      res.status(400).json({ message: `User not updated: ${error.message}` });
+    res.status(500).json({ message: `Error updating user: ${error.message}` });
   }
 });
 
 
 
-router.delete("/deleteuser/:id", (req, res) => {
+router.delete("/deleteuser/:id", async (req, res) => {
   try {
-      const id = parseInt(req.params.id); 
-      const initialLength = db.length;
-      console.log(id ,db, initialLength);
-      
-      db = db.filter(user => user.id !== id); 
-      console.log(db)
-      if (db.length < initialLength) {
-          res.status(200).send(` User with id ${id} deleted successfully!`);
-      } else {
-          throw new Error(`User with id ${id} not found.`);
-      }
+    const id = parseInt(req.params.id);
+    const [result, fields] = await connection.promise().query(
+      "DELETE FROM USER WHERE id = ?", [id] );
+    if (result.affectedRows > 0) {
+      res.status(200).json({ message: "User deleted successfully", fields });
+    } else {
+      res.status(404).json({ message: "User not found" });
+    }
   } catch (err) {
-      res.status(400).send(` Error deleting user: ${err},${err.message}`);
+    res.status(500).json({ error: `Error deleting user: ${err.message}` });
   }
 });
 
 
 
-module.exports = router;
+// module.exports = router;
+
+export default router;
