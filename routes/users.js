@@ -1,18 +1,30 @@
 import express from "express";
 var router = express.Router();
+import jwt from "jsonwebtoken";
 
 import connection from '../module/dbconnection.js';
+import authorization,{secret} from "../jwt.js";
+import { token } from "morgan";
 
 
+router.post("/login", async (req,res) => {
+  const {username,password} = req.body
+  jwt.sign({username,password},secret,(err,token)=>{
+    if(err){
+      res.status(400).json({"err":err})
+    }
+    res.status(200).json({"token":token})
+  })
+});
 
 /* GET users listing. */
-router.get('/', function(req, res, next) {
+router.get('/', authorization,function(req, res) {
   res.send('Express is working ..,');
 });
 
 
 
-router.get("/get", async (req, res) => {
+router.get("/get",authorization, async (req, res) => {
   try {
     const [rows, fields] = await connection.promise().query("SELECT * FROM USER;");
     res.status(200).json({ data: rows });
@@ -22,7 +34,7 @@ router.get("/get", async (req, res) => {
 });
     
 
-router.get("/get/:id",async (req ,res)=> {
+router.get("/get/:id",authorization,async (req ,res)=> {
   try {
 
     const id = parseInt(req.params.id); 
@@ -42,7 +54,7 @@ router.get("/get/:id",async (req ,res)=> {
 });
 
 
-router.post("/createuser", (req ,res) => {
+router.post("/createuser", authorization,(req ,res) => {
   try{
         const {name , age  , role } = req.body
         if (!name && !age && !role) {
@@ -65,7 +77,7 @@ router.post("/createuser", (req ,res) => {
   }
 });
 
-router.put("/updateuser/:id", async (req, res) => {
+router.put("/updateuser/:id",authorization, async (req, res) => {
   try {
     const { name, age } = req.body; 
     const id = parseInt(req.params.id); 
@@ -94,7 +106,7 @@ router.put("/updateuser/:id", async (req, res) => {
 
 
 
-router.delete("/deleteuser/:id", async (req, res) => {
+router.delete("/deleteuser/:id",authorization, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [result, fields] = await connection.promise().query(
